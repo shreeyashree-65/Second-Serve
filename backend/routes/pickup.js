@@ -4,9 +4,6 @@ const { auth, checkUserType } = require('../middleware/auth');
 const Food = require('../models/Food');
 const User = require('../models/User');
 
-// @route   POST /api/pickup/request/:foodId
-// @desc    Request to pickup food
-// @access  Private (NGO/Volunteer)
 router.post('/request/:foodId', auth, checkUserType('ngo', 'volunteer'), async (req, res) => {
   try {
     const food = await Food.findById(req.params.foodId);
@@ -25,7 +22,6 @@ router.post('/request/:foodId', auth, checkUserType('ngo', 'volunteer'), async (
       });
     }
 
-    // Check if already requested
     const alreadyRequested = food.requests.some(
       r => r.user.toString() === req.userId.toString()
     );
@@ -46,7 +42,6 @@ router.post('/request/:foodId', auth, checkUserType('ngo', 'volunteer'), async (
     food.status = 'requested';
     await food.save();
 
-    // Notify donor
     const io = req.app.get('io');
     io.to(`user-${food.donor}`).emit('pickup-requested', {
       foodId: food._id,
@@ -70,9 +65,6 @@ router.post('/request/:foodId', auth, checkUserType('ngo', 'volunteer'), async (
   }
 });
 
-// @route   PUT /api/pickup/approve/:foodId/:requesterId
-// @desc    Approve pickup request
-// @access  Private (Donor)
 router.put('/approve/:foodId/:requesterId', auth, checkUserType('donor'), async (req, res) => {
   try {
     const food = await Food.findOne({
@@ -98,10 +90,8 @@ router.put('/approve/:foodId/:requesterId', auth, checkUserType('donor'), async 
       });
     }
 
-    // Approve this request
     request.status = 'approved';
 
-    // Reject all other requests
     food.requests.forEach(r => {
       if (r.user.toString() !== req.params.requesterId) {
         r.status = 'rejected';
@@ -112,7 +102,6 @@ router.put('/approve/:foodId/:requesterId', auth, checkUserType('donor'), async 
     food.assignedTo = req.params.requesterId;
     await food.save();
 
-    // Notify approved collector
     const io = req.app.get('io');
     io.to(`user-${req.params.requesterId}`).emit('pickup-approved', {
       foodId: food._id,
@@ -120,7 +109,6 @@ router.put('/approve/:foodId/:requesterId', auth, checkUserType('donor'), async 
       qrCodeUrl: food.qrCodeUrl
     });
 
-    // Notify rejected collectors
     food.requests.forEach(r => {
       if (r.status === 'rejected') {
         io.to(`user-${r.user}`).emit('pickup-rejected', {
@@ -143,9 +131,6 @@ router.put('/approve/:foodId/:requesterId', auth, checkUserType('donor'), async 
   }
 });
 
-// @route   POST /api/pickup/verify/:foodId
-// @desc    Verify pickup with code
-// @access  Private (NGO/Volunteer)
 router.post('/verify/:foodId', auth, checkUserType('ngo', 'volunteer'), async (req, res) => {
   try {
     const { verificationCode } = req.body;
@@ -173,7 +158,6 @@ router.post('/verify/:foodId', auth, checkUserType('ngo', 'volunteer'), async (r
     food.status = 'picked-up';
     await food.save();
 
-    // Update user stats
     await User.findByIdAndUpdate(req.userId, {
       $inc: { 'stats.totalPickups': 1, 'stats.mealsServed': food.servings }
     });
@@ -182,7 +166,6 @@ router.post('/verify/:foodId', auth, checkUserType('ngo', 'volunteer'), async (r
       $inc: { 'stats.totalDonations': 1, 'stats.mealsServed': food.servings }
     });
 
-    // Notify donor
     const io = req.app.get('io');
     io.to(`user-${food.donor}`).emit('pickup-verified', {
       foodId: food._id,
@@ -203,9 +186,6 @@ router.post('/verify/:foodId', auth, checkUserType('ngo', 'volunteer'), async (r
   }
 });
 
-// @route   POST /api/pickup/complete/:foodId
-// @desc    Complete pickup with proof photo
-// @access  Private (NGO/Volunteer)
 router.post('/complete/:foodId', auth, checkUserType('ngo', 'volunteer'), async (req, res) => {
   try {
     const { proofPhoto, notes } = req.body;
@@ -229,7 +209,6 @@ router.post('/complete/:foodId', auth, checkUserType('ngo', 'volunteer'), async 
     food.notes = notes;
     await food.save();
 
-    // Notify donor
     const io = req.app.get('io');
     io.to(`user-${food.donor}`).emit('pickup-completed', {
       foodId: food._id,
@@ -249,9 +228,6 @@ router.post('/complete/:foodId', auth, checkUserType('ngo', 'volunteer'), async 
   }
 });
 
-// @route   GET /api/pickup/my-pickups
-// @desc    Get user's pickup history
-// @access  Private
 router.get('/my-pickups', auth, async (req, res) => {
   try {
     const pickups = await Food.find({
